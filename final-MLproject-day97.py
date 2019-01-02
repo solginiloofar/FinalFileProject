@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[109]:
+# In[ ]:
+
 
 
 import numpy as np   
@@ -32,6 +33,8 @@ import statsmodels as s
 from numpy.polynomial import polynomial
 import scipy
 from sklearn import linear_model
+import statsmodels.formula.api as smf
+
 
 #preprocessing////////////////////////////////
 
@@ -115,9 +118,6 @@ print(train.corr())
 #Plot correlation
 
 
-# In[125]:
-
-
 # Simple linear regression//////////////////////////
 
 feature = test['tweets']
@@ -148,7 +148,7 @@ get_residual_sum_of_squares(feature, target, intercept, slope)
 # linear regression 
 #می باشد  
 
-# Create rank column for dataset_test
+# Create rank column for dataset_test------------------------------------------
 
 x=np.array(test['tweets']).reshape(-1,1)
 y=np.array(test['rank']).reshape(-1,1)
@@ -159,16 +159,151 @@ a= y_hat_2
 a= a.reshape(-1, len(a))
 columns=['rank']
 dataset_test['rank'] = pd.DataFrame(a.reshape(-1, len(a)),columns=columns)
+dataset_test['rank']
 
 
-# In[128]:
+# Multiple Regression/////////////////////////
+
+train['tweets_squared']=train['tweets']*train['tweets']
+train['reply_likes']=train['reply']*train['likes']
+train['log_Listed']=np.log10(train['Listed'])
+train['Followers_plus_Following']=train['Followers']+train['Following']
+
+test['tweets_squared']=test['tweets']*test['tweets']
+test['reply_likes']=test['reply']*test['likes']
+test['log_Listed']=np.log10(test['Listed'])
+test['Followers_plus_Following']=test['Followers']+test['Following']
+
+f1=plt.figure(1)
+plt.scatter(train['Listed'],train['rank'], color='blue')
+f1.show()
+
+f2=plt.figure(2)
+plt.scatter(train['log_Listed'],train['rank'],color='red')
+f2.show()
+
+features_of_model_1=['tweets', 'reply','likes','Followers','Following']
+features_of_model_2=['tweets', 'reply','likes','Followers','Following','log_Listed']
+features_of_model_3=features_of_model_2 + ['tweets_squared','log_Listed','Followers_plus_Following']
+
+reg=LinearRegression()
+model_1=reg.fit(train[features_of_model_1], train['rank'])
+predicted_output_1=reg.predict(train[features_of_model_1])
+p1=reg.predict(dataset_test[features_of_model_1])
+
+reg=LinearRegression()
+model_2=reg.fit(train[features_of_model_2], train['rank'])
+predicted_output_2=reg.predict(train[features_of_model_2])
+p2=reg.predict(dataset_test[features_of_model_2])
+
+reg=LinearRegression()
+model_3=reg.fit(train[features_of_model_3], train['rank'])
+predicted_output_3=reg.predict(train[features_of_model_3])
+p3=reg.predict(dataset_test[features_of_model_3])
+
+print(model_1.intercept_,'',model_1.coef_)
+print(model_2.intercept_,'',model_2.coef_)
+print(model_3.intercept_,'',model_3.coef_)
 
 
-print(dataset_test['rank'])
+def get_resedual_sum_of_squares(y,y_hat):
+    r=y-y_hat
+    rs=r*r
+    rss=rs.sum()
+    return rss
+rss_1=get_resedual_sum_of_squares(test['rank'],p1)
+print('rss for model1:', rss_1)
+
+rss_2=get_resedual_sum_of_squares(test['rank'],p2)
+print('rss for model1:', rss_2)
+
+rss_3=get_resedual_sum_of_squares(test['rank'],p3)
+print('rss for model1:', rss_3)
+
+# Ridge Regression/////////////////
+
+#with forwar stepwise-------------------------------
+def forward_selected(data, response):
+    remaining = set(data.columns)
+    remaining.remove(response)
+    selected = []
+    current_score, best_new_score = 0.0, 0.0
+    while remaining and current_score == best_new_score:
+        scores_with_candidates = []
+        for candidate in remaining:
+            formula = "{} ~ {} + 1".format(response,
+                                           ' + '.join(selected + [candidate]))
+            score = smf.ols(formula, data).fit().rsquared_adj
+            scores_with_candidates.append((score, candidate))
+        scores_with_candidates.sort()
+        best_new_score, best_candidate = scores_with_candidates.pop()
+        if current_score < best_new_score:
+            remaining.remove(best_candidate)
+            selected.append(best_candidate)
+            current_score = best_new_score
+    formula = "{} ~ {} + 1".format(response,
+                                   ' + '.join(selected))
+    model = smf.ols(formula, data).fit()
+    return model
+
+# with cross value-----------------------
+
+x=data_train['likes']
+y=data_train['rank']
+
+get_ipython().magic(u'matplotlib inline')
+
+n=input("plz enter degree of polynomial")
+n=int(n)
+
+def polynomial_dataframe():
+    for i in range(int(n)):
+            pn=np.polyfit(x,y,n)
+            plt.plot(x,np.polyval(pn,x))
+
+polynomial_dataframe()
+
+train = train.sort_values(['likes','rank'], ascending=[True, False])
 
 
-# In[ ]:
+def polynomial_dataframe(x, n):
+    for i in range(int(n)):
+            pn=np.polyfit(x,y,n)
+            plt.plot(x,np.polyval(pn,x))
 
 
+poly15_data= polynomial_dataframe(sales['likes'],15)
+
+
+l2_small_penalty = 1.5e-5
+model = linear_model.Ridge(alpha=l2_small_penalty, normalize=True)
+model.fit(poly15_data, sales['rank'])
+
+l2_large_penalty=1.23e2
+
+n=len(data_shuffle)
+k=10 #10 cross validation
+
+for i in range(k):
+    start=(n*i)/k
+    end=(n*(i+1))/k-1
+    print i, (start,end)
+    
+data_shuffle[0:10]
+
+start=(n*i)/10
+end= (n*(i+1))/10
+data_shuffle[start:end+1]
+data_shuffle[0:start].append(data_shuffle[end+1:n])
+
+n=len(data_valid)
+k= input("plz enter k for k-cross-validation")
+l2_penalty=1.5e-5
+def k_fold_cross_validation(k, l2_penalty, poly15_data, price):
+    for i in range:
+        start=(n*i)/k-1
+        end=(n*(i+1))/k-1
+        print i, (start,end)
+        return i
 
 
